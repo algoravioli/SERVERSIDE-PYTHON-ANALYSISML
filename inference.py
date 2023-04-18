@@ -17,7 +17,7 @@ from AudioFunctions import *
 from BellFunctions import detect_bell_and_return_timings
 
 # Example i.e How to run this script
-# python inference.py --audio_file_path "/audiofile/this.wav" --output_image_path "/output/image.png" --save_cut_audio_path "/output/cut.wav"
+# python inference.py --audio_file_path "./audio_tests/bell_check.wav" --output_image_path "output_img.png" --save_cut_audio_path "saved_audio/audio1.wav" --save_csv_path "output.csv"
 
 for idx, arg in enumerate(sys.argv):
     if arg in ("--audio_file_path"):
@@ -26,6 +26,8 @@ for idx, arg in enumerate(sys.argv):
         output_image_path = sys.argv[idx + 1]
     if arg in ("--save_cut_audio_path"):
         save_cut_audio_path = sys.argv[idx + 1]
+    if arg in ("--save_csv_path"):
+        save_csv_path = sys.argv[idx + 1]
 
 BellStart, BellEnd = detect_bell_and_return_timings(audio_file_path)
 # print(BellStart, BellEnd)
@@ -53,6 +55,10 @@ TotalVolume_hat = np.cumsum(y_hat_V)
 
 # Return Q of predicted V
 y_hat_V_Q = GetQ(y_hat_V)
+
+# Write y_hat_V_Q to csv
+df = pd.DataFrame(y_hat_V_Q)
+df.to_csv(save_csv_path)
 
 # Save results to output_image_path
 plt.plot(y_hat_V_Q)
