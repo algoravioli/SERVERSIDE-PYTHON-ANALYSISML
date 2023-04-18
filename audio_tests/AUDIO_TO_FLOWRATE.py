@@ -23,26 +23,62 @@ def GiveMeData(path_to_audio, path_to_csv):
     audioFile = path_to_audio
     x, Fs = librosa.load(audioFile, sr=None)
     superFlow_df = pd.read_csv(path_to_csv, error_bad_lines=False)
-    voidedVolume = superFlow_df[" Vmic"].to_numpy()
+    # return superFlow_df column names
+    print(superFlow_df.columns)
+    voidedVolume = superFlow_df["Vmic"].to_numpy()
     voidedVolume_diff = np.diff(voidedVolume[::2])
-    Q = superFlow_df[" Qura"].to_numpy()[::2]
+    Q = superFlow_df["Qura"].to_numpy()[::2]
+    length_Q = len(Q)
     F, f_names = ShortTermFeatures.feature_extraction(x, Fs, 8820, 8820, deltas=False)
     length_F = F.shape[1]
-    Q_trim = Q[0:length_F]
-    voidedVolume_diff_trim = voidedVolume_diff[0:length_F]
-    F_transposed = np.transpose(F)
+    length_V = len(voidedVolume_diff)
+    if length_V < length_Q and length_Q < length_F:
+        F = F[:, 0:length_V]
+        Q_trim = Q[0:length_V]
+        voidedVolume_diff_trim = voidedVolume_diff[0:length_V]
+        Q_column = np.reshape(Q_trim, (length_V, 1))
+        V_column = np.reshape(voidedVolume_diff_trim, (length_V, 1))
+        F_transposed = np.transpose(F)
+
+    elif length_V == length_Q and length_Q < length_F:
+        F = F[:, 0:length_Q]
+        Q_trim = Q
+        voidedVolume_diff_trim = voidedVolume_diff[0:length_Q]
+        Q_column = np.reshape(Q_trim, (length_Q, 1))
+        V_column = np.reshape(voidedVolume_diff_trim, (length_Q, 1))
+        F_transposed = np.transpose(F)
+    else:
+        Q_trim = Q[0:length_F]
+        voidedVolume_diff_trim = voidedVolume_diff[0:length_F]
+        F_transposed = np.transpose(F)
+        Q_column = np.reshape(Q_trim, (length_F, 1))
+        V_column = np.reshape(voidedVolume_diff_trim, (length_F, 1))
     print(F_transposed.shape)
-    Q_column = np.reshape(Q_trim, (length_F, 1))
-    V_column = np.reshape(voidedVolume_diff_trim, (length_F, 1))
     print(Q_column.shape)
     print(V_column.shape)
     return F_transposed, f_names, Q_column, V_column
 
 
-F1, f_names_1, Q1, V1 = GiveMeData("sghfebt2sf1w.wav", "sf1post.CSV")
-F2, f_names_2, Q2, V2 = GiveMeData("sghfebt2sf1wr2.wav", "sf1post.CSV")  # test
-F3, f_names_3, Q3, V3 = GiveMeData("sghfebt2sf2w.wav", "sf2post.CSV")
-F4, f_names_4, Q4, V4 = GiveMeData("sghfebt2sf2wr2.wav", "sf2post.CSV")
+# %%
+systemDIR = os.getcwd()
+filesINFolder = os.listdir(systemDIR + "/audio_tests")
+print(filesINFolder)
+# %%
+F1, f_names_1, Q1, V1 = GiveMeData(
+    f"{systemDIR}/audio_tests/sghfebt2sf1w.wav",
+    f"{systemDIR}/audio_tests/sf1post.CSV",
+)
+F2, f_names_2, Q2, V2 = GiveMeData(
+    f"{systemDIR}/audio_tests/sghfebt2sf1wr2.wav",
+    f"{systemDIR}/audio_tests/sf1post.CSV",
+)  # test
+F3, f_names_3, Q3, V3 = GiveMeData(
+    f"{systemDIR}/audio_tests/sghfebt2sf2w.wav", f"{systemDIR}/audio_tests/sf2post.CSV"
+)
+F4, f_names_4, Q4, V4 = GiveMeData(
+    f"{systemDIR}/audio_tests/sghfebt2sf2wr2.wav",
+    f"{systemDIR}/audio_tests/sf2post.CSV",
+)
 # %%
 # V_stack F1, F3, F4
 F = np.vstack((F1, F3, F2))
@@ -57,7 +93,7 @@ Test_Q = Q4
 Test_V = V4
 
 # %%
-
+# Use F predict Q
 regQ = MLPRegressor(
     solver="adam",
     activation="logistic",
@@ -76,6 +112,7 @@ F = scaler.transform(F)
 Test_F = scaler.transform(Test_F)
 regQ.fit(F, Q)
 
+# Use F predict V
 regV = MLPRegressor(
     solver="adam",
     activation="logistic",
