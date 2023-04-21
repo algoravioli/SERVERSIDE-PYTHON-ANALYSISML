@@ -8,11 +8,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import librosa
 import soundfile as sf
-
-# from pyAudioAnalysis import ShortTermFeatures
-# import tensorflow as tf
-# from sklearn.neural_network import MLPRegressor
-# from sklearn.preprocessing import StandardScaler, RobustScaler
 import pickle as pkl
 from AudioFunctions import *
 from BellFunctions import detect_bell_and_return_timings
@@ -20,15 +15,10 @@ from BellFunctions import detect_bell_and_return_timings
 # Example i.e How to run this script
 # python inference.py --audio_file_path "./audio_tests/bell_check.wav" --output_image_path "output_img.png" --save_cut_audio_path "saved_audio/audio1.wav" --save_csv_path "output.csv"
 
-for idx, arg in enumerate(sys.argv):
-    if arg in ("--audio_file_path"):
-        audio_file_path = sys.argv[idx + 1]
-    if arg in ("--output_image_path"):
-        output_image_path = sys.argv[idx + 1]
-    if arg in ("--save_cut_audio_path"):
-        save_cut_audio_path = sys.argv[idx + 1]
-    if arg in ("--save_csv_path"):
-        save_csv_path = sys.argv[idx + 1]
+audio_file_path = "audio.wav"
+output_image_path = "image.png"
+save_cut_audio_path = "audio_cut.wav"
+save_csv_path = "features.csv"
 
 BellStart, BellEnd = detect_bell_and_return_timings(audio_file_path)
 # print(BellStart, BellEnd)
@@ -36,7 +26,6 @@ BellStart, BellEnd = detect_bell_and_return_timings(audio_file_path)
 # Cut audio file at BellStart and BellEnd
 pad = 0.5
 audioFile, Fs = librosa.load(audio_file_path, sr=None)
-
 if BellStart == None:
     audioFile = audioFile
 else:
