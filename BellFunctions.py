@@ -183,27 +183,33 @@ def detect_bell_and_return_timings(path_to_audio_file):
     # get index of t where bell_flag_all is true
     tBellIndexes = np.where(bell_flag_all)[0]
     tBell = t[tBellIndexes]
-
-    collectTimes = []
-    currentTime = tBell[0]
-    for i in range(len(tBell)):
-        if i == 0:
-            continue
-        else:
-            previousTime = currentTime
-            currentTime = tBell[i]
-            if currentTime - previousTime < 1:
+    if len(tBell) == 0:
+        # Set tBellStart to 0 and tBellEnd to last
+        tBellStart = 0
+        tBellEnd = t[-1]
+    else:
+        collectTimes = []
+        currentTime = tBell[0]
+        for i in range(len(tBell)):
+            if i == 0:
                 continue
             else:
-                collectTimes.append([previousTime, currentTime])
+                previousTime = currentTime
+                currentTime = tBell[i]
+                if currentTime - previousTime < 1:
+                    continue
+                else:
+                    collectTimes.append([previousTime, currentTime])
+        tBellStart = collectTimes[0][0]
+        tBellEnd = collectTimes[0][-1]
+
+    # print("_____________________________________________")
+    # print(tBellStart, tBellEnd)
 
     # %%
     # Segregate into start and end bell times
     # tBellStart = tBell[tBell < t[-1] / 2]
     # tBellEnd = tBell[tBell >= t[-1] / 2]
-
-    tBellStart = collectTimes[0][0]
-    tBellEnd = collectTimes[0][-1]
 
     # # remove outliers
     # if len(tBellStart) > 10:

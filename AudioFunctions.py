@@ -13,7 +13,7 @@ from sklearn.preprocessing import StandardScaler, RobustScaler
 def GiveMeData(path_to_audio, path_to_csv):
     audioFile = path_to_audio
     x, Fs = librosa.load(audioFile, sr=None)
-    superFlow_df = pd.read_csv(path_to_csv, on_bad_lines="warn")
+    superFlow_df = pd.read_csv(path_to_csv, error_bad_lines=False)
     # return superFlow_df column names
     voidedVolume = superFlow_df["Vmic"].to_numpy()
     voidedVolume_diff = np.diff(voidedVolume[::2])

@@ -8,10 +8,11 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import librosa
 import soundfile as sf
-from pyAudioAnalysis import ShortTermFeatures
-import tensorflow as tf
-from sklearn.neural_network import MLPRegressor
-from sklearn.preprocessing import StandardScaler, RobustScaler
+
+# from pyAudioAnalysis import ShortTermFeatures
+# import tensorflow as tf
+# from sklearn.neural_network import MLPRegressor
+# from sklearn.preprocessing import StandardScaler, RobustScaler
 import pickle as pkl
 from AudioFunctions import *
 from BellFunctions import detect_bell_and_return_timings
@@ -35,9 +36,13 @@ BellStart, BellEnd = detect_bell_and_return_timings(audio_file_path)
 # Cut audio file at BellStart and BellEnd
 pad = 0.5
 audioFile, Fs = librosa.load(audio_file_path, sr=None)
-BellStartIdx = int((BellStart + pad) * Fs)
-BellEndIdx = int((BellEnd - pad) * Fs)
-audioFile = audioFile[BellStartIdx:BellEndIdx]
+
+if BellStart == None:
+    audioFile = audioFile
+else:
+    BellStartIdx = int((BellStart + pad) * Fs)
+    BellEndIdx = int((BellEnd - pad) * Fs)
+    audioFile = audioFile[BellStartIdx:BellEndIdx]
 
 # Extract features
 F, f_names = GiveMeFreqInfo(audioFile, Fs)
