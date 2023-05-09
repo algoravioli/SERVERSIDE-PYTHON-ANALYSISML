@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import librosa
+from timeit import default_timer as timer
+from scipy.signal import find_peaks, peak_prominences
 from scipy.special import erfcinv
 from pyAudioAnalysis import ShortTermFeatures
 
@@ -39,11 +41,12 @@ def remove_outliers(lst):
     newList = lst[(lst <= upperLimit) & (lst >= lowerLimit)]
 
     return newList, outliers
-#%%
-path_to_audio_file = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT5t2.wav"
 
+path_to_audio_file = "C:\\Users\\Ivan\\Documents\\GitHub\\SERVERSIDE-PYTHON-ANALYSISML\\audio_tests\\sghTLT5t2.wav"
 filename = path_to_audio_file
- # %%
+print(filename)
+
+ #%%
 #bell parameters
 f0 = np.array([1325, 1525])  # f0 of bell
 f1 = np.array([3475, 3675])  # f1 of bell
@@ -60,7 +63,22 @@ L = int(fs / df)  # window / NFFT size
 noverlap = int(L * 0.5)  # overlap size
 hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
 
-f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs)
+#%%
+# ivan find peaks here
+
+peaks, _ = find_peaks(x,height=0.07)
+ypeaks = x[peaks]
+plt.plot(x)
+plt.plot(peaks, ypeaks, "x")
+# input = np.dstack((peaks, ypeaks)) pointless array 
+
+#%%
+starttime = timer()
+print("what up lesgo")
+f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=ypeaks)
+endtime = timer()
+print("this shi took me", endtime - starttime)
+
 # librosa stft
 # %%
 # remove frequencies before 500 Hz and after 5 kHz

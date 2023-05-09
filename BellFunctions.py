@@ -37,8 +37,8 @@ def remove_outliers(lst):
     return newList, outliers
 
 
-def JohnnySTFT(array, window, noverlap, Fs):
-    # if array is row, transpose to column
+def JohnnySTFT(array, window, noverlap, Fs, compare):
+    # if array is row, transpose to column   
     if array.shape[0] == 1:
         array = array.T
 
@@ -65,23 +65,28 @@ def JohnnySTFT(array, window, noverlap, Fs):
     index = 0
     s = np.zeros((fLen, 1))
 
+
     # Compute STFT
+    
     while winEnd < Nsignal:
+        #
         if index > 0:
             tc = (winStart + winEnd) / 2 / Fs
             t = np.append(t, tc)
-
+        
         xWin = array[winStart : winEnd + 1] * window
-
+        
         X = scipyfft(xWin)
         X = X[0:fLen]
         X = np.reshape(X, (len(X), 1))
+      
         # stack new column next to s
         s = np.hstack((s, X))
 
         winStart = winStart + (N - noverlap)
         winEnd = winEnd + (N - noverlap)
         index = index + 1
+        
         print(
             f"Computing Bell Timings: {int(np.round((winEnd / Nsignal),2) * 100)}% done.",
             end="\r",
