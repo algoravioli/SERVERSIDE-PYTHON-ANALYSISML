@@ -15,7 +15,7 @@ from BellFunctions import detect_bell_and_return_timings
 # Example i.e How to run this script
 # python inference.py --audio_file_path "./audio_tests/bell_check.wav" --output_image_path "output_img.png" --save_cut_audio_path "saved_audio/audio1.wav" --save_csv_path "output.csv"
 
-audio_file_path = "audio.wav"
+audio_file_path = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT5t2.wav"
 output_image_path = "image.png"
 save_cut_audio_path = "audio_cut.wav"
 save_csv_path = "features.csv"
@@ -62,3 +62,5 @@ plt.savefig(output_image_path)
 # Normalise cut audio file first
 audioFile = audioFile / np.max(np.abs(audioFile))
 sf.write(save_cut_audio_path, audioFile, Fs, subtype="PCM_24")
+
+# %%

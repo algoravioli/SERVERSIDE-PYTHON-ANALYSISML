@@ -13,11 +13,12 @@ from sklearn.preprocessing import StandardScaler, RobustScaler
 def GiveMeData(path_to_audio, path_to_csv):
     audioFile = path_to_audio
     x, Fs = librosa.load(audioFile, sr=None)
-    superFlow_df = pd.read_csv(path_to_csv, error_bad_lines=False)
+    superFlow_df = pd.read_csv(path_to_csv, error_bad_lines=False, skiprows=6)
+    # print(superFlow_df.columns)
     # return superFlow_df column names
-    voidedVolume = superFlow_df["Vmic"].to_numpy()
+    voidedVolume = superFlow_df[" Vmic"].to_numpy()
     voidedVolume_diff = np.diff(voidedVolume[::2])
-    Q = superFlow_df["Qura"].to_numpy()[::2]
+    Q = superFlow_df[" Qura"].to_numpy()[::2]
     length_Q = len(Q)
     F, f_names = ShortTermFeatures.feature_extraction(x, Fs, 8820, 8820, deltas=False)
     length_F = F.shape[1]
@@ -69,19 +70,19 @@ def DeriveFitArray():
     # %%
     F1, f_names_1, Q1, V1 = GiveMeData(
         f"{systemDIR}/audio_tests/sghfebt2sf1w.wav",
-        f"{systemDIR}/audio_tests/sf1post.CSV",
+        f"{systemDIR}/audio_tests/sf1post.csv",
     )
     F2, f_names_2, Q2, V2 = GiveMeData(
         f"{systemDIR}/audio_tests/sghfebt2sf1wr2.wav",
-        f"{systemDIR}/audio_tests/sf1post.CSV",
+        f"{systemDIR}/audio_tests/sf1post.csv",
     )  # test
     F3, f_names_3, Q3, V3 = GiveMeData(
         f"{systemDIR}/audio_tests/sghfebt2sf2w.wav",
-        f"{systemDIR}/audio_tests/sf2post.CSV",
+        f"{systemDIR}/audio_tests/sf2post.csv",
     )
     F4, f_names_4, Q4, V4 = GiveMeData(
         f"{systemDIR}/audio_tests/sghfebt2sf2wr2.wav",
-        f"{systemDIR}/audio_tests/sf2post.CSV",
+        f"{systemDIR}/audio_tests/sf2post.csv",
     )
     # %%
     # V_stack F1, F3, F4
