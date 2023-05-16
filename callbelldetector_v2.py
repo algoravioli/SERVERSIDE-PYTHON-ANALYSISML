@@ -11,8 +11,11 @@ from scipy.special import erfcinv
 from pyAudioAnalysis import ShortTermFeatures
 
 from AudioFunctions import *
-from BellFunctions import detect_bell_and_return_timings
-from BellFunctions import JohnnySTFT
+from BellFunctions_v2 import detect_bell_and_return_timings
+from BellFunctions_v2 import JohnnySTFT
+from BellFunctions_v2 import fft_at_peaks
+from BellFunctions_v2 import extract_bell_times
+
 #%%
 def remove_outliers(lst):
     """
@@ -42,7 +45,7 @@ def remove_outliers(lst):
 
     return newList, outliers
 
-path_to_audio_file = "C:\\Users\\Ivan\\Documents\\GitHub\\SERVERSIDE-PYTHON-ANALYSISML\\audio_tests\\sghTLT5t2.wav"
+path_to_audio_file = "C:\\Users\\Ivan\\Documents\\GitHub\\SERVERSIDE-PYTHON-ANALYSISML\\audio_tests\\sghTLT1t1.wav"
 filename = path_to_audio_file
 print(filename)
 
@@ -55,9 +58,11 @@ threshold = 0.4  # amplitude threshold for bell at f0 and f1
 
 # Extract audio signal and sampling frequency
 x, fs = librosa.load(filename, sr=None)
+filelength = x.shape[0]/fs
+print("File is ",filelength, "s long")
 
 # %%
-# Get STFT of signal
+# define variables for STFT of signal
 df = 25  # frequency bin width
 L = int(fs / df)  # window / NFFT size
 noverlap = int(L * 0.5)  # overlap size
@@ -66,15 +71,26 @@ hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning wind
 #%%
 # ivan find peaks here
 
-peaks, _ = find_peaks(x,height=0.07)
-ypeaks = x[peaks]
+peaklocs, _ = find_peaks(x,height=0.06)
+ypeaks = x[peaklocs]
 plt.plot(x)
-plt.plot(peaks, ypeaks, "x")
-# input = np.dstack((peaks, ypeaks)) pointless array 
+plt.plot(peaklocs, ypeaks, "x")
 
 #%%
+# Compute windowed FFT of peak locations
 starttime = timer()
-f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=ypeaks)
+f, t, s = fft_at_peaks(x,fs,peaklocs)
+[tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
+
+
+
+#%%
+#perform STFT on remaining signal
+
+if tBellStart == 0 or tBellEnd >= len(x)/fs-0.5:
+    f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=peaklocs)
+    [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
+
 endtime = timer()
 print("The FFT process took", endtime - starttime, "s.")
 
@@ -173,33 +189,33 @@ print(tBellStart, tBellEnd)
 
 # %%
 # Segregate into start and end bell times
-tBellStart = tBell[tBell < t[-1] / 2]
-tBellEnd = tBell[tBell >= t[-1] / 2]
+# tBellStart = tBell[tBell < t[-1] / 2]
+# tBellEnd = tBell[tBell >= t[-1] / 2]
 
-# remove outliers
-if len(tBellStart) > 10:
-    tBellStart, _ = remove_outliers(tBellStart)
+# # remove outliers
+# if len(tBellStart) > 10:
+#     tBellStart, _ = remove_outliers(tBellStart)
 
-if len(tBellEnd) > 10:
-    tBellEnd, _ = remove_outliers(tBellEnd)
+# if len(tBellEnd) > 10:
+#     tBellEnd, _ = remove_outliers(tBellEnd)
 
-# Take last sample of BellStart and first sample of BellEnd times
-tBellStart = tBellStart[-1]
-tBellEnd = tBellEnd[0]
+# # Take last sample of BellStart and first sample of BellEnd times
+# tBellStart = tBellStart[-1]
+# tBellEnd = tBellEnd[0]
 
-# checks and warnings if start and end times make sense
-if tBell.size == 0:
-    warnings.warn("No bells detected")
-    tBellStart = 1 / fs
-    tBellEnd = t[-1]
+# # checks and warnings if start and end times make sense
+# if tBell.size == 0:
+#     warnings.warn("No bells detected")
+#     tBellStart = 1 / fs
+#     tBellEnd = t[-1]
 
-if tBellEnd - tBellStart < 5:
-    if tBellStart > 0.5 * t[-1]:
-        tBellStart = 0
-        warnings.warn("No start bell detected.")
-    if tBellEnd < 0.5 * t[-1]:
-        tBellEnd = t[-1]
-        warnings.warn("No end bell detected")
+# if tBellEnd - tBellStart < 5:
+#     if tBellStart > 0.5 * t[-1]:
+#         tBellStart = 0
+#         warnings.warn("No start bell detected.")
+#     if tBellEnd < 0.5 * t[-1]:
+#         tBellEnd = t[-1]
+#         warnings.warn("No end bell detected")
 #%%
 print(tBellStart, tBellEnd)
 
