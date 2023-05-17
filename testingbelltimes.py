@@ -46,7 +46,7 @@ def remove_outliers(lst):
 
     return newList, outliers
 
-path_to_audio_file = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT1t1.wav"
+path_to_audio_file = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT2t1.wav"
 filename = path_to_audio_file
 print(filename)
 
@@ -75,7 +75,7 @@ x_rescale = x.reshape(-1, 1)
 x_rescale = preprocessing.MinMaxScaler().fit_transform(x_rescale)
 x_rescale = x_rescale[:,0]
 
-peaklocs, _ = find_peaks(x_rescale,height=0.60,distance=100)
+peaklocs, _ = find_peaks(x_rescale,height=(0.55, 0.8),distance=50)
 ypeaks = x[peaklocs]
 #plt.plot(x)
 plt.plot(x_rescale)
@@ -85,28 +85,7 @@ plt.plot(peaklocs, ypeaks, "x")
 # Compute windowed FFT of peak locations
 starttime = timer()
 f, t, s = fft_at_peaks(x,fs,peaklocs)
-[tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
-# try:
-#     [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
-# except: 
-#     print("Reverting to old STFT")
-#     tBellStart = 0
-#     tBellEnd = 0
-
-
 #%%
-#perform STFT on remaining signal
-
-if tBellStart == 0 or tBellEnd >= len(x)/fs-0.5:
-    f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=peaklocs)
-    [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
-
-endtime = timer()
-print("The FFT process took", endtime - starttime, "s.")
-
-# librosa stft
-# %%
-# remove frequencies before 500 Hz and after 5 kHz
 s = s[(f >= 500) & (f <= 5000), :]
 f = f[(f >= 500) & (f <= 5000)]
 
@@ -187,46 +166,18 @@ else:
         else:
             previousTime = currentTime
             currentTime = tBell[i]
-            if currentTime - previousTime < 1:
+            if currentTime - previousTime < 10:
                 continue
             else:
                 collectTimes.append([previousTime, currentTime])
-    tBellStart = collectTimes[0][0]
-    tBellEnd = collectTimes[0][-1]
-
-print("_____________________________________________")
-print(tBellStart, tBellEnd)
-
+    try:
+        tBellStart = collectTimes[0][0]
+    except:
+        tBellStart = 0
+    try:
+        tBellEnd = collectTimes[0][-1]
+    except:
+        tBellEnd = len(x)/fs-0.5
 # %%
-# Segregate into start and end bell times
-# tBellStart = tBell[tBell < t[-1] / 2]
-# tBellEnd = tBell[tBell >= t[-1] / 2]
-
-# # remove outliers
-# if len(tBellStart) > 10:
-#     tBellStart, _ = remove_outliers(tBellStart)
-
-# if len(tBellEnd) > 10:
-#     tBellEnd, _ = remove_outliers(tBellEnd)
-
-# # Take last sample of BellStart and first sample of BellEnd times
-# tBellStart = tBellStart[-1]
-# tBellEnd = tBellEnd[0]
-
-# # checks and warnings if start and end times make sense
-# if tBell.size == 0:
-#     warnings.warn("No bells detected")
-#     tBellStart = 1 / fs
-#     tBellEnd = t[-1]
-
-# if tBellEnd - tBellStart < 5:
-#     if tBellStart > 0.5 * t[-1]:
-#         tBellStart = 0
-#         warnings.warn("No start bell detected.")
-#     if tBellEnd < 0.5 * t[-1]:
-#         tBellEnd = t[-1]
-#         warnings.warn("No end bell detected")
-#%%
 print(tBellStart, tBellEnd)
-
 # %%
