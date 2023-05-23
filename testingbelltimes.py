@@ -1,6 +1,8 @@
 #%%
 import os
 import warnings
+import logging
+import sys
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -46,7 +48,67 @@ def remove_outliers(lst):
 
     return newList, outliers
 
-path_to_audio_file = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT2t1.wav"
+#peak clipping functions
+def clip_data(unclipped, high_clip, low_clip):
+    ''' Clip unclipped between high_clip and low_clip. 
+    unclipped contains a single column of unclipped data.'''
+    
+    # convert to np.array to access the np.where method
+    np_unclipped = np.array(unclipped)
+    # clip data above HIGH_CLIP or below LOW_CLIP
+    cond_high_clip = (np_unclipped > HIGH_CLIP) | (np_unclipped < LOW_CLIP)
+    np_clipped = np.where(cond_high_clip, np.nan, np_unclipped)
+    return np_clipped.tolist()
+
+
+def create_sample_data():
+    ''' Create sine wave, amplitude +/-2 with random spikes. '''
+    x = np.linspace(0, 2*np.pi, 1000)
+    y = 2 * np.sin(x)
+    df = pd.DataFrame(list(zip(x,y)), columns=['x', 'y'])
+    df['rand'] = np.random.random_sample(len(x),)
+    # create random positive and negative spikes
+    cond_spike_high = (df['rand'] > RAND_HIGH)
+    df['spike_high'] = np.where(cond_spike_high, SPIKE, 0)
+    cond_spike_low = (df['rand'] < RAND_LOW)
+    df['spike_low'] = np.where(cond_spike_low, -SPIKE, 0)
+    df['y_spikey'] = df['y'] + df['spike_high'] + df['spike_low']
+    return df
+
+def ewma_fb(df_column, span):
+    ''' Apply forwards, backwards exponential weighted moving average (EWMA) to df_column. '''
+    # Forwards EWMA.
+    fwd = pd.Series.ewm(df_column, span=span).mean()
+    # Backwards EWMA.
+    bwd = pd.Series.ewm(df_column[::-1],span=10).mean()
+    # Add and take the mean of the forwards and backwards EWMA.
+    stacked_ewma = np.vstack(( fwd, bwd[::-1] ))
+    fb_ewma = np.mean(stacked_ewma, axis=0)
+    return fb_ewma
+    
+    
+def remove_outliers(spikey, fbewma, delta):
+    ''' Remove data from df_spikey that is > delta from fbewma. '''
+    np_spikey = np.array(spikey)
+    np_fbewma = np.array(fbewma)
+    cond_delta = (np.abs(np_spikey-np_fbewma) > delta)
+    np_remove_outliers = np.where(cond_delta, np.nan, np_spikey)
+    return np_remove_outliers
+
+    
+def main():
+    df = create_sample_data()
+
+    df['y_clipped'] = clip_data(df['y_spikey'].tolist(), HIGH_CLIP, LOW_CLIP)
+    df['y_ewma_fb'] = ewma_fb(df['y_clipped'], SPAN)
+    df['y_remove_outliers'] = remove_outliers(df['y_clipped'].tolist(), df['y_ewma_fb'].tolist(), DELTA)
+    df['y_interpolated'] = df['y_remove_outliers'].interpolate()
+    
+    ax = df.plot(x='x', y='y_spikey', color='blue', alpha=0.5)
+    ax2 = df.plot(x='x', y='y_interpolated', color='black', ax=ax)
+    
+
+path_to_audio_file = "/Users/ivantan/Documents/GitHub/SERVERSIDE-PYTHON-ANALYSISML/audio_tests/sghTLT5t2.wav"
 filename = path_to_audio_file
 print(filename)
 
@@ -70,13 +132,45 @@ noverlap = int(L * 0.5)  # overlap size
 hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
 
 #%%
-# ivan find peaks here
+## ivan find peaks here
 x_rescale = x.reshape(-1, 1)
 x_rescale = preprocessing.MinMaxScaler().fit_transform(x_rescale)
 x_rescale = x_rescale[:,0]
 
-peaklocs, _ = find_peaks(x_rescale,height=(0.55, 0.8),distance=50)
-ypeaks = x[peaklocs]
+##clip x_rescale
+logging.basicConfig(datefmt='%H:%M:%S',
+                    stream=sys.stdout, level=logging.DEBUG,
+                    format='%(asctime)s %(message)s')
+
+# Distance away from the FBEWMA that data should be removed.
+DELTA = 0.1
+
+# clip data above this value:
+HIGH_CLIP = 2.1
+
+# clip data below this value:
+LOW_CLIP = -2.1
+
+# random values above this trigger a spike:
+RAND_HIGH = 0.95
+
+# random values below this trigger a negative spike:
+RAND_LOW = 0.001
+
+# How many samples to run the FBEWMA over.
+SPAN = 10
+
+# spike amplitude
+SPIKE = 2
+
+x_clipped = clip_data(x_rescale, HIGH_CLIP, LOW_CLIP)
+x_fbewma = ewma_fb(x_clipped, SPAN)
+x_trimmed = remove_outliers(x_rescale, x_fbewma, DELTA)
+x_rescale = x_trimmed.interpolate()
+
+
+peaklocs, _ = find_peaks(x_rescale,height=(0.2, 0.8),distance=250, prominence= (0.1,0.9))
+ypeaks = x_rescale[peaklocs]
 #plt.plot(x)
 plt.plot(x_rescale)
 plt.plot(peaklocs, ypeaks, "x")
@@ -156,7 +250,8 @@ tBell = t[tBellIndexes]
 if len(tBell) == 0:
     # Set tBellStart to 0 and tBellEnd to last
     tBellStart = 0
-    tBellEnd = t[-1]
+    # tBellEnd = t[-1] previous value to set end time if error
+    tBellEnd = len(x)/fs-0.5
 else:
     collectTimes = []
     currentTime = tBell[0]
@@ -170,14 +265,13 @@ else:
                 continue
             else:
                 collectTimes.append([previousTime, currentTime])
-    try:
-        tBellStart = collectTimes[0][0]
-    except:
+    if len(collectTimes) == 0:
         tBellStart = 0
-    try:
-        tBellEnd = collectTimes[0][-1]
-    except:
         tBellEnd = len(x)/fs-0.5
+
+    else:
+        tBellStart = collectTimes[0][0]
+        tBellEnd = collectTimes[0][-1]
 # %%
 print(tBellStart, tBellEnd)
 # %%

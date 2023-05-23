@@ -58,6 +58,10 @@ def fft_at_peaks(x, fs, npeaks):
     for idx in range(len(npeaks)):
         winStart = npeaks[idx] - np.floor(N/2).astype(int) # window start pointer
         winEnd = npeaks[idx] + np.floor(N/2).astype(int) - 1 # window end pointer
+        print(
+            f"Computing Bell Timings: {int(np.round((winEnd / winStart),2) * 100)}% done.",
+            end="\r",
+        )
 
         if winStart >= 0 and winEnd < len(x):
             xwin = x[winStart:winEnd+1] * window
@@ -66,7 +70,7 @@ def fft_at_peaks(x, fs, npeaks):
 
             s = np.concatenate([s, X.reshape(-1, 1)], axis=1)
             t.append(npeaks[idx] * dt)
-
+        
     return f, np.array(t), s
 
 
