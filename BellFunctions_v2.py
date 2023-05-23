@@ -299,9 +299,9 @@ def detect_bell_and_return_timings(path_to_audio_file):
 
     peaklocs, _ = find_peaks(x_rescale,height=(0.15, 0.8),distance=50, prominence= (0.05,0.9))
     ypeaks = x_rescale[peaklocs]
-    #plt.plot(x)
-    plt.plot(x_rescale)
-    plt.plot(peaklocs, ypeaks, "x")
+    #plot despiked audio file and peak locations
+    # plt.plot(x_rescale)
+    # plt.plot(peaklocs, ypeaks, "x")
 
         # Compute windowed FFT of peak locations
     starttime = timer()
