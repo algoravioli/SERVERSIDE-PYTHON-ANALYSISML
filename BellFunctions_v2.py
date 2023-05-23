@@ -1,9 +1,13 @@
 # %%
 import warnings
+import logging
+import sys
 import numpy as np
 from scipy.fft import fft as scipyfft
 from scipy.signal import stft
 from scipy.io import wavfile
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
 import librosa
 from timeit import default_timer as timer
 from scipy.signal import find_peaks, peak_prominences
@@ -38,6 +42,38 @@ from scipy.special import erfcinv
 #     newList = lst[(lst <= upperLimit) & (lst >= lowerLimit)]
 
 #     return newList, outliers
+
+def despike(yi, th=0.00001):
+    # '''Remove spike from array yi, the spike area is where the difference between 
+    #   the neigboring points is higher than th.'''
+    y = np.copy(yi) # use y = y1 if it is OK to modify input array
+    n = len(y)
+    x = np.arange(n)
+    c = np.argmax(y)
+    d = abs(np.diff(y))
+    try:
+        l = c - 1 - np.where(d[c-1::-1]<th)[0][0]
+        r = c + np.where(d[c:]<th)[0][0] + 1
+    except: # no spike, return unaltered array
+        check = 0
+        return y, check
+    # for fit, use area twice wider then the spike
+    if (r-l) <= 3:
+        l -= 1
+        r += 1
+    s = int(round((r-l)/2.))
+    lx = l - s
+    rx = r + s
+    # make a gap at spike area
+    xgapped = np.concatenate((x[lx:l],x[r:rx]))
+    ygapped = np.concatenate((y[lx:l],y[r:rx]))
+    # quadratic fit of the gapped array
+    z = np.polyfit(xgapped,ygapped,2)
+    p = np.poly1d(z)
+    y[l:r] = p(x[l:r])
+    check = 1
+    return y, check
+
 
 def fft_at_peaks(x, fs, npeaks):
     # x = audio signal, 
@@ -240,32 +276,49 @@ def detect_bell_and_return_timings(path_to_audio_file):
     f1 = np.array([3475, 3675])  # f1 of bell
     threshold = 0.4  # amplitude threshold for bell at f0 and f1
 
+    # define variables for STFT of signal
+    # df = 25  # frequency bin width
+    # L = int(fs / df)  # window / NFFT size
+    # noverlap = int(L * 0.5)  # overlap size
+    # hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
+
+
     # %%
     # Extract audio signal and sampling frequency
     x, fs = librosa.load(filename, sr=None)
 
     # ivan find peaks here
-    peaklocs, _ = find_peaks(x,height=0.07)
-    # ypeaks = x[peaklocs]
-    # plt.plot(x)
-    # plt.plot(peaklocs, ypeaks, "x")
+    x_rescale = x.reshape(-1, 1)
+    x_rescale = preprocessing.MinMaxScaler().fit_transform(x_rescale)
+    x_rescale = x_rescale[:,0]
 
-    # Compute windowed FFT of peak locations
+    #despike
+    x_rescale, check = despike(x_rescale)
+    if check == 1:
+        print("Despiker has removed large spikes from original wav file.")
+
+    peaklocs, _ = find_peaks(x_rescale,height=(0.15, 0.8),distance=50, prominence= (0.05,0.9))
+    ypeaks = x_rescale[peaklocs]
+    #plt.plot(x)
+    plt.plot(x_rescale)
+    plt.plot(peaklocs, ypeaks, "x")
+
+        # Compute windowed FFT of peak locations
+    starttime = timer()
     f, t, s = fft_at_peaks(x,fs,peaklocs)
     [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
 
 
         # %%
-    if tBellStart.size == 0 or tBellEnd.size == 0:
-        # Get STFT of signal
-        df = 25  # frequency bin width
-        L = int(fs / df)  # window / NFFT size
-        noverlap = int(L * 0.5)  # overlap size
-        hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
-
-        f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs)
-
+    
+    if tBellStart == 0 or tBellEnd >= len(x)/fs-0.5:
+        f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=peaklocs)
         [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
+
+    endtime = timer()
+    print("The FFT process took", endtime - starttime, "s.", "\n",
+          "Bell detected at", tBellStart,"s and", tBellEnd,"s.")
+
     # librosa stft
     # %%
     
