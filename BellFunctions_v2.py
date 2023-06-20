@@ -1,40 +1,113 @@
 # %%
 import warnings
+import logging
+import sys
 import numpy as np
 from scipy.fft import fft as scipyfft
 from scipy.signal import stft
 from scipy.io import wavfile
+from sklearn import preprocessing
+import matplotlib.pyplot as plt
 import librosa
+from timeit import default_timer as timer
+from scipy.signal import find_peaks, peak_prominences
 from scipy.special import erfcinv
 
 
-def remove_outliers(lst):
-    """
-    Takes a list of values, and detects and outputs a list with removed outliers based on 3 x scaled MAD.
-    The outliers are listed in the second output.
 
-    Parameters:
-    lst (numpy.ndarray): a 1D numpy array of values.
+# def remove_outliers(lst):
+#     """
+#     Takes a list of values, and detects and outputs a list with removed outliers based on 3 x scaled MAD.
+#     The outliers are listed in the second output.
 
-    Returns:
-    newList (numpy.ndarray): a 1D numpy array of values with outliers removed.
-    outliers (numpy.ndarray): a 1D numpy array of outlier values that were removed.
-    """
+#     Parameters:
+#     lst (numpy.ndarray): a 1D numpy array of values.
 
-    # Compute Median Absolute Deviation (MAD)
-    medList = np.median(lst)
-    MAD = np.median(np.abs(lst - np.median(lst)))
+#     Returns:
+#     newList (numpy.ndarray): a 1D numpy array of values with outliers removed.
+#     outliers (numpy.ndarray): a 1D numpy array of outlier values that were removed.
+#     """
 
-    # Compute scaled MAD
-    c = -1 / (np.sqrt(2) * erfcinv(3 / 2))
-    scaledMAD = c * MAD
-    lowerLimit = medList - 3 * scaledMAD
-    upperLimit = medList + 3 * scaledMAD
+#     # Compute Median Absolute Deviation (MAD)
+#     medList = np.median(lst)
+#     MAD = np.median(np.abs(lst - np.median(lst)))
 
-    outliers = lst[(lst > upperLimit) | (lst < lowerLimit)]
-    newList = lst[(lst <= upperLimit) & (lst >= lowerLimit)]
+#     # Compute scaled MAD
+#     c = -1 / (np.sqrt(2) * erfcinv(3 / 2))
+#     scaledMAD = c * MAD
+#     lowerLimit = medList - 3 * scaledMAD
+#     upperLimit = medList + 3 * scaledMAD
 
-    return newList, outliers
+#     outliers = lst[(lst > upperLimit) | (lst < lowerLimit)]
+#     newList = lst[(lst <= upperLimit) & (lst >= lowerLimit)]
+
+#     return newList, outliers
+
+def despike(yi, th=0.00001):
+    # '''Remove spike from array yi, the spike area is where the difference between 
+    #   the neigboring points is higher than th.'''
+    y = np.copy(yi) # use y = y1 if it is OK to modify input array
+    n = len(y)
+    x = np.arange(n)
+    c = np.argmax(y)
+    d = abs(np.diff(y))
+    try:
+        l = c - 1 - np.where(d[c-1::-1]<th)[0][0]
+        r = c + np.where(d[c:]<th)[0][0] + 1
+    except: # no spike, return unaltered array
+        check = 0
+        return y, check
+    # for fit, use area twice wider then the spike
+    if (r-l) <= 3:
+        l -= 1
+        r += 1
+    s = int(round((r-l)/2.))
+    lx = l - s
+    rx = r + s
+    # make a gap at spike area
+    xgapped = np.concatenate((x[lx:l],x[r:rx]))
+    ygapped = np.concatenate((y[lx:l],y[r:rx]))
+    # quadratic fit of the gapped array
+    z = np.polyfit(xgapped,ygapped,2)
+    p = np.poly1d(z)
+    y[l:r] = p(x[l:r])
+    check = 1
+    return y, check
+
+
+def fft_at_peaks(x, fs, npeaks):
+    # x = audio signal, 
+    # fs = sampling frequency, 
+    # npeaks = indices of peaks
+
+    # FFT & audio parameters
+    dt = 1 / fs
+    df = 25  # frequency bin size
+    N = int(np.floor(fs / df))  # FFT length
+    f = np.arange(0, fs/2 + df, df)  # one-sided frequency bin list
+    window = 0.5 * (1 - np.cos(2 * np.pi * np.arange(N) / (N-1)))  # hanning window
+
+    # loop initialization parameters
+    t = []
+    s = np.zeros((len(f), 0))
+
+    for idx in range(len(npeaks)):
+        winStart = npeaks[idx] - np.floor(N/2).astype(int) # window start pointer
+        winEnd = npeaks[idx] + np.floor(N/2).astype(int) - 1 # window end pointer
+        print(
+            f"Computing Bell Timings: {int(np.round((winEnd / winStart),2) * 100)}% done.",
+            end="\r",
+        )
+
+        if winStart >= 0 and winEnd < len(x):
+            xwin = x[winStart:winEnd+1] * window
+            X = np.abs(scipyfft(xwin))
+            X = X[:len(f)]
+
+            s = np.concatenate([s, X.reshape(-1, 1)], axis=1)
+            t.append(npeaks[idx] * dt)
+        
+    return f, np.array(t), s
 
 
 def JohnnySTFT(array, window, noverlap, Fs, compare):
@@ -64,6 +137,10 @@ def JohnnySTFT(array, window, noverlap, Fs, compare):
     # inital loop parametrs
     index = 0
     s = np.zeros((fLen, 1))
+    # rangemin=min(compare)
+    # rangemax=max(compare)              
+    
+    # print(rangemin, rangemax)
 
 
     # Compute STFT
@@ -71,15 +148,16 @@ def JohnnySTFT(array, window, noverlap, Fs, compare):
     while winEnd < Nsignal:
         #
         if index > 0:
-            tc = (winStart + winEnd) / 2 / Fs
+            tc = (winStart + winEnd + 1) / 2 / Fs
             t = np.append(t, tc)
         
         xWin = array[winStart : winEnd + 1] * window
+
         
         X = scipyfft(xWin)
         X = X[0:fLen]
         X = np.reshape(X, (len(X), 1))
-      
+    
         # stack new column next to s
         s = np.hstack((s, X))
 
@@ -97,29 +175,7 @@ def JohnnySTFT(array, window, noverlap, Fs, compare):
 
     return f, t, s
 
-
-def detect_bell_and_return_timings(path_to_audio_file):
-    filename = path_to_audio_file
-    # %%
-    # bell parameters
-    f0 = np.array([1325, 1525])  # f0 of bell
-    f1 = np.array([3475, 3675])  # f1 of bell
-    threshold = 0.4  # amplitude threshold for bell at f0 and f1
-
-    # %%
-    # Extract audio signal and sampling frequency
-    x, fs = librosa.load(filename, sr=None)
-
-    # %%
-    # Get STFT of signal
-    df = 25  # frequency bin width
-    L = int(fs / df)  # window / NFFT size
-    noverlap = int(L * 0.5)  # overlap size
-    hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
-
-    f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs)
-    # librosa stft
-    # %%
+def extract_bell_times(s,f,t,f0,f1,threshold):
     # remove frequencies before 500 Hz and after 5 kHz
     s = s[(f >= 500) & (f <= 5000), :]
     f = f[(f >= 500) & (f <= 5000)]
@@ -208,6 +264,65 @@ def detect_bell_and_return_timings(path_to_audio_file):
         tBellStart = collectTimes[0][0]
         tBellEnd = collectTimes[0][-1]
 
+    return tBellStart, tBellEnd
+
+
+def detect_bell_and_return_timings(path_to_audio_file):
+    # %%
+    filename = path_to_audio_file
+    
+    # bell parameters
+    f0 = np.array([1325, 1525])  # f0 of bell
+    f1 = np.array([3475, 3675])  # f1 of bell
+    threshold = 0.4  # amplitude threshold for bell at f0 and f1
+
+    # define variables for STFT of signal
+    # df = 25  # frequency bin width
+    # L = int(fs / df)  # window / NFFT size
+    # noverlap = int(L * 0.5)  # overlap size
+    # hannWin = 0.5 * (1 - np.cos(2 * np.pi * np.arange(L) / (L - 1)))  # hanning window
+
+
+    # %%
+    # Extract audio signal and sampling frequency
+    x, fs = librosa.load(filename, sr=None)
+
+    # ivan find peaks here
+    x_rescale = x.reshape(-1, 1)
+    x_rescale = preprocessing.MinMaxScaler().fit_transform(x_rescale)
+    x_rescale = x_rescale[:,0]
+
+    #despike
+    x_rescale, check = despike(x_rescale)
+    if check == 1:
+        print("Despiker has removed large spikes from original wav file.")
+
+    peaklocs, _ = find_peaks(x_rescale,height=(0.15, 0.8),distance=50, prominence= (0.05,0.9))
+    ypeaks = x_rescale[peaklocs]
+    #plot despiked audio file and peak locations
+    # plt.plot(x_rescale)
+    # plt.plot(peaklocs, ypeaks, "x")
+
+        # Compute windowed FFT of peak locations
+    starttime = timer()
+    f, t, s = fft_at_peaks(x,fs,peaklocs)
+    [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
+
+
+        # %%
+    
+    if tBellStart == 0 or tBellEnd >= len(x)/fs-0.5:
+        f, t, s = JohnnySTFT(x, window=hannWin, noverlap=noverlap, Fs=fs, compare=peaklocs)
+        [tBellStart,tBellEnd] = extract_bell_times(s,f,t,f0,f1,threshold)
+
+    endtime = timer()
+    print("The FFT process took", endtime - starttime, "s.", "\n",
+          "Bell detected at", tBellStart,"s and", tBellEnd,"s.")
+
+    # librosa stft
+    # %%
+    
+
     # print("_____________________________________________")
     # print(tBellStart, tBellEnd)
 
@@ -242,6 +357,5 @@ def detect_bell_and_return_timings(path_to_audio_file):
     #         warnings.warn("No end bell detected")
 
     return tBellStart, tBellEnd
-
 
 # %%
